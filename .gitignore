@@ -92,4 +92,4 @@ keys/
 .agents/rules/
 
 # Specific files
-log.md
+logs.md

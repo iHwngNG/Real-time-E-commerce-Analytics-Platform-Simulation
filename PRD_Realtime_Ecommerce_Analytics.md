@@ -141,7 +141,7 @@ Xây dựng hệ thống xử lý **streaming big data** mô phỏng hành vi ng
 
 | Module | Technology | Version target | Vai trò |
 |---|---|---|---|
-| Simulator | Python + Faker | Python 3.11 | Sinh dữ liệu giả lập |
+| Simulator | Python + Faker | Python 3.12 | Sinh dữ liệu giả lập |
 | Message Broker | Apache Kafka (KRaft) | 3.7+ | Event streaming backbone |
 | Stream Processor | PySpark Structured Streaming | Spark 3.5 | Real-time aggregation |
 | Database | PostgreSQL | 16 | Lưu trữ chính |
