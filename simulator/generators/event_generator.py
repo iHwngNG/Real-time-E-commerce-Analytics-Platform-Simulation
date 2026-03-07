@@ -1,6 +1,8 @@
+import os
 import uuid
 import random
 import time
+import yaml
 from datetime import datetime, timezone
 
 # =============================================================================
@@ -9,12 +11,52 @@ from datetime import datetime, timezone
 # Output : JSON-serializable dicts matching the raw-events schema.
 # =============================================================================
 
+# Default config file path (relative to simulator/)
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config.yaml")
+
+
+def load_config(config_path: str = CONFIG_PATH) -> dict:
+    """
+    Load simulator configuration from YAML file.
+    Environment variables override YAML values (F1.3.4).
+    """
+    config = {
+        "num_active_users": 100,
+        "target_events_per_sec": 500,
+        "run_mode": "continuous",
+        "peak_hour_enabled": True,
+        "peak_hour_multiplier": 3,
+        "peak_hours": [{"start": 12, "end": 13}, {"start": 20, "end": 22}],
+    }
+
+    # Load from YAML if exists
+    if os.path.exists(config_path):
+        with open(config_path, "r", encoding="utf-8") as f:
+            yaml_data = yaml.safe_load(f)
+            if yaml_data and "simulator" in yaml_data:
+                config.update(yaml_data["simulator"])
+
+    # Env vars override YAML (highest priority)
+    config["num_active_users"] = int(
+        os.environ.get("NUM_ACTIVE_USERS", config["num_active_users"])
+    )
+    config["target_events_per_sec"] = int(
+        os.environ.get("TARGET_EVENTS_PER_SEC", config["target_events_per_sec"])
+    )
+    config["run_mode"] = os.environ.get("RUN_MODE", config["run_mode"])
+    config["peak_hour_enabled"] = os.environ.get(
+        "PEAK_HOUR_ENABLED", str(config["peak_hour_enabled"])
+    ).lower() in ("true", "1", "yes")
+
+    return config
+
 
 class EventGenerator:
     """
     Simulates user behavioral events on an e-commerce platform.
     Events follow a weighted funnel: page_view -> product_view -> click ->
     add_to_cart -> purchase, with user segment influencing conversion rates.
+    Supports configurable throughput and peak hour simulation.
     """
 
     # F1.3.1 — Event types and default weights
@@ -49,27 +91,28 @@ class EventGenerator:
         "referral",
     ]
     PAYMENT_METHODS = ["credit_card", "e-wallet", "bank_transfer", "cod"]
-    SCREEN_SIZES = [
-        "390x844",
-        "412x915",
-        "1920x1080",
-        "1366x768",
-        "2560x1440",
-        "768x1024",
-    ]
     APP_VERSIONS = ["3.0.0", "3.1.0", "3.2.1", "3.3.0"]
 
-    def __init__(self, users: list, products: list):
+    def __init__(self, users: list, products: list, config: dict = None):
         """
-        Initialize with pre-loaded user and product data from DB.
+        Initialize with pre-loaded user/product data and configuration.
         Args:
             users: List of user dicts (from PostgreSQL users table).
             products: List of product dicts (from PostgreSQL products table).
+            config: Simulator config dict (from load_config()).
         """
+        # Load config (F1.3.4)
+        self.config = config or load_config()
+
         # Filter only active users for event generation (F1.1.4)
         self.active_users = [u for u in users if u.get("is_active", True)]
         if not self.active_users:
             raise ValueError("No active users available for simulation.")
+
+        # Limit to NUM_ACTIVE_USERS (F1.3.4)
+        num_active = self.config["num_active_users"]
+        if len(self.active_users) > num_active:
+            self.active_users = random.sample(self.active_users, num_active)
 
         self.products = products
 
@@ -81,6 +124,43 @@ class EventGenerator:
         # Session tracking: {user_id: {"session_id": ..., "last_active": ...}}
         self._sessions = {}
         self._session_timeout = 1800  # 30 minutes in seconds (F1.3.3)
+
+    def is_peak_hour(self) -> bool:
+        """
+        Check if current hour falls within peak hour ranges (F1.3.3).
+        Peak hours have event rate multiplied by peak_hour_multiplier.
+        """
+        if not self.config["peak_hour_enabled"]:
+            return False
+
+        current_hour = datetime.now(timezone.utc).hour
+        for window in self.config.get("peak_hours", []):
+            if window["start"] <= current_hour < window["end"]:
+                return True
+        return False
+
+    def get_current_rate(self) -> float:
+        """
+        Return the target events/sec adjusted for peak hours.
+        During peak hours, rate = base_rate * peak_hour_multiplier.
+        """
+        base_rate = self.config["target_events_per_sec"]
+        if self.is_peak_hour():
+            return base_rate * self.config.get("peak_hour_multiplier", 3)
+        return base_rate
+
+    def get_run_duration(self) -> int:
+        """
+        Parse run_mode to determine how long to run (in seconds).
+        Returns:
+            int: 0 for continuous, N for timed:N
+        """
+        mode = self.config["run_mode"]
+        if mode == "continuous":
+            return 0
+        if mode.startswith("timed:"):
+            return int(mode.split(":")[1])
+        return 0
 
     def _get_or_create_session(self, user_id: str) -> str:
         """
@@ -163,18 +243,18 @@ class EventGenerator:
         device = user.get("preferred_device", "mobile")
 
         if device == "mobile":
-            ua = f"Mozilla/5.0 (Linux; Android 14) Mobile Safari/537.36"
+            ua = "Mozilla/5.0 (Linux; Android 14) Mobile Safari/537.36"
             screen = random.choice(["390x844", "412x915"])
         elif device == "tablet":
-            ua = f"Mozilla/5.0 (iPad; CPU OS 17_0) Safari/605.1.15"
+            ua = "Mozilla/5.0 (iPad; CPU OS 17_0) Safari/605.1.15"
             screen = "768x1024"
         else:
-            ua = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0"
+            ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0"
             screen = random.choice(["1920x1080", "1366x768", "2560x1440"])
 
         return {
-            "ip_address": f"{random.randint(1,255)}.{random.randint(0,255)}"
-            f".{random.randint(0,255)}.{random.randint(1,254)}",
+            "ip_address": f"{random.randint(1, 255)}.{random.randint(0, 255)}"
+            f".{random.randint(0, 255)}.{random.randint(1, 254)}",
             "user_agent": ua,
             "app_version": random.choice(self.APP_VERSIONS),
             "screen_size": screen,
@@ -237,13 +317,25 @@ if __name__ == "__main__":
     from user_generator import UserGenerator
     from product_generator import ProductGenerator
 
+    # Load config
+    cfg = load_config()
+    print("=== Loaded Config ===")
+    print(json.dumps(cfg, indent=2, default=str))
+    print()
+
     # Generate sample seed data
     user_gen = UserGenerator()
     prod_gen = ProductGenerator()
     sample_users = user_gen.generate_batch(10)
     sample_products = prod_gen.generate_batch(5)
 
-    # Generate events using sample data
-    event_gen = EventGenerator(users=sample_users, products=sample_products)
+    # Generate events using sample data + config
+    event_gen = EventGenerator(users=sample_users, products=sample_products, config=cfg)
+    print(f"=== Peak Hour: {event_gen.is_peak_hour()} ===")
+    print(f"=== Current Rate: {event_gen.get_current_rate()} events/sec ===")
+    print(f"=== Run Duration: {event_gen.get_run_duration()} (0=continuous) ===")
+    print()
+
     sample_event = event_gen.generate_event()
+    print("=== Sample Event ===")
     print(json.dumps(sample_event, indent=2))

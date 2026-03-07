@@ -1,0 +1,27 @@
+# =============================================================================
+# Simulator Configuration — F1.3.4
+# Override: Environment variables take priority over this file.
+# =============================================================================
+
+simulator:
+  # Number of active users generating events simultaneously
+  num_active_users: 100
+
+  # Target events per second (throughput)
+  target_events_per_sec: 500
+
+  # Run mode: "continuous" or "timed:300" (run for 300 seconds then stop)
+  run_mode: "continuous"
+
+  # Enable peak hour simulation (event rate x3 during 12-13h and 20-22h)
+  peak_hour_enabled: true
+
+  # Peak hour multiplier
+  peak_hour_multiplier: 3
+
+  # Peak hour time ranges (24h format)
+  peak_hours:
+    - start: 12
+      end: 13
+    - start: 20
+      end: 22
