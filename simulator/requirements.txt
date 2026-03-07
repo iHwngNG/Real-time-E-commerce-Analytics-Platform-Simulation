@@ -1,2 +1,4 @@
 Faker==24.4.0
 PyYAML==6.0.1
+kafka-python-ng==2.2.3
+python-snappy==0.7.3
