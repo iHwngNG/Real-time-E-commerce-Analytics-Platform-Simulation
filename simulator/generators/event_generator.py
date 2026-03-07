@@ -339,3 +339,46 @@ if __name__ == "__main__":
     sample_event = event_gen.generate_event()
     print("=== Sample Event ===")
     print(json.dumps(sample_event, indent=2))
+    print()
+
+    # --- SIMULATION LOOP DEMO ---
+    run_duration = event_gen.get_run_duration()
+    target_rate = event_gen.get_current_rate()
+    sleep_time = 1.0 / target_rate if target_rate > 0 else 0.1
+
+    print(
+        f"🚀 Bắt đầu mô phỏng (Mode: {cfg['run_mode']}) ở tốc độ {target_rate} events/s..."
+    )
+    print("Bấm Ctrl+C để dừng lại!\n")
+
+    start_time = time.time()
+    events_generated = 0
+
+    try:
+        while True:
+            # Kiểm tra thời gian nếu mode timed:N
+            if run_duration > 0 and (time.time() - start_time) >= run_duration:
+                print(f"⏱️ Đã hết thời gian mô phỏng ({run_duration}s). Tự động dừng.")
+                break
+
+            # Sinh event và in ra 1 dòng ngắn gọn để terminal không bị tràn
+            event = event_gen.generate_event()
+            print(
+                f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] "
+                f"User: {event['user']['user_id'][:8]}... | "
+                f"Event: {event['event_type']:15} | "
+                f"Product: {event['product']['sku']}"
+            )
+
+            events_generated += 1
+            time.sleep(sleep_time)
+
+    except KeyboardInterrupt:
+        print("\n🛑 Đã dừng thủ công bằng Ctrl+C.")
+
+    finally:
+        elapsed = time.time() - start_time
+        print(f"\n📊 --- THỐNG KÊ ---")
+        print(f"Tổng events sinh ra : {events_generated}")
+        print(f"Thời gian chạy thực : {elapsed:.2f} giây")
+        print(f"Tốc độ trung bình   : {events_generated / elapsed:.2f} events/s")
