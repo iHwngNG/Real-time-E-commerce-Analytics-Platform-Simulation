@@ -1,6 +1,5 @@
 import os
 import json
-import time
 import logging
 from kafka import KafkaProducer
 from kafka.errors import KafkaError

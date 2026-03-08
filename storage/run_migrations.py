@@ -7,7 +7,6 @@
 
 import os
 import psycopg2
-from psycopg2 import sql
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL", "postgresql://admin:admin123@localhost:5432/ecommerce"
@@ -56,7 +55,7 @@ def run_migrations():
         try:
             cur.execute(sql_script)
             cur.execute("INSERT INTO schema_migrations (version) VALUES (%s)", (file,))
-            print(f"  -> SUCCESS")
+            print("  -> SUCCESS")
         except Exception as e:
             print(f"  -> ERROR applying {file}: {e}")
             conn.close()

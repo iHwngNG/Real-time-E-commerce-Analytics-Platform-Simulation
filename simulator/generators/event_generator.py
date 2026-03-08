@@ -378,7 +378,7 @@ if __name__ == "__main__":
 
     finally:
         elapsed = time.time() - start_time
-        print(f"\n📊 --- THỐNG KÊ ---")
+        print("\n📊 --- THỐNG KÊ ---")
         print(f"Tổng events sinh ra : {events_generated}")
         print(f"Thời gian chạy thực : {elapsed:.2f} giây")
         print(f"Tốc độ trung bình   : {events_generated / elapsed:.2f} events/s")
