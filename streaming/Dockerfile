@@ -15,5 +15,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY . /app
 
-# Quick testing entrypoint
-CMD ["python", "test/test_ingest.py"]
+# Entrypoint — F3
+CMD ["python", "main.py"]

@@ -6,8 +6,11 @@ from pyspark.sql import SparkSession
 # Purpose: Create and configure a reusable SparkSession for all streaming jobs.
 # =============================================================================
 
-# Kafka connector package version (F3.1.1)
+# Connector packages (F3.1.1)
 SPARK_KAFKA_PACKAGE = "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1"
+SPARK_POSTGRES_PACKAGE = "org.postgresql:postgresql:42.7.3"
+
+SPARK_JARS_PACKAGES = f"{SPARK_KAFKA_PACKAGE},{SPARK_POSTGRES_PACKAGE}"
 
 # Checkpoint base directory (F3.1.2)
 CHECKPOINT_BASE = os.environ.get("SPARK_CHECKPOINT_DIR", "/tmp/spark-checkpoints")
@@ -27,8 +30,8 @@ def create_spark_session(app_name: str = "EcommerceStreaming") -> SparkSession:
     """
     spark = (
         SparkSession.builder.appName(app_name)
-        # F3.1.1 — Kafka connector package
-        .config("spark.jars.packages", SPARK_KAFKA_PACKAGE)
+        # F3.1.1 — Kafka and PostgreSQL connector packages
+        .config("spark.jars.packages", SPARK_JARS_PACKAGES)
         # F3.1.2 — Default checkpoint location for streaming queries
         .config("spark.sql.streaming.checkpointLocation", CHECKPOINT_BASE)
         # Performance tuning for streaming workloads

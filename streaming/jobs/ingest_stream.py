@@ -58,6 +58,10 @@ def process_ingestion(df_raw: DataFrame) -> tuple[DataFrame, DataFrame]:
         .withColumn("sale_price", col("product.sale_price"))
         .withColumn("quantity", col("event_data.quantity"))
         .withColumn("position", col("event_data.position_in_list"))
+        .withColumn("time_on_page_sec", col("event_data.time_on_page_sec"))
+        .withColumn("search_keyword", col("event_data.search_keyword"))
+        .withColumn("payment_method", col("event_data.payment_method"))
+        .withColumn("order_id", col("event_data.order_id"))
         .withColumn("app_version", col("metadata.app_version"))
         # We no longer need the big nested JSON properties
         .drop("user", "product", "event_data", "metadata")
