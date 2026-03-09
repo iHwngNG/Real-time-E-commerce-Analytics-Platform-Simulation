@@ -1,0 +1,33 @@
+# =============================================================================
+# dbt Project Config — F6.3.1
+# Purpose: Define models, seeds, tests, and macros for the analytics platform.
+# =============================================================================
+
+name: 'ecommerce_analytics'
+version: '1.0.0'
+config-version: 2
+
+profile: 'ecommerce_analytics'
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Model-level materialization defaults
+models:
+  ecommerce_analytics:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table
+      +tags: ["daily"]
+
+# Variables — configurable at runtime
+vars:
+  # Default lookback for incremental models
+  incremental_lookback_hours: 24

@@ -1,0 +1,17 @@
+# =============================================================================
+# dbt Profile — F6.3.2
+# Purpose: PostgreSQL connection config (reads from env vars, no hardcode).
+# =============================================================================
+
+ecommerce_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('DBT_POSTGRES_HOST', 'postgres') }}"
+      port: "{{ env_var('DBT_POSTGRES_PORT', '5432') | int }}"
+      user: "{{ env_var('DBT_POSTGRES_USER', 'admin') }}"
+      pass: "{{ env_var('DBT_POSTGRES_PASSWORD', 'admin123') }}"
+      dbname: "{{ env_var('DBT_POSTGRES_DB', 'ecommerce') }}"
+      schema: public
+      threads: 4

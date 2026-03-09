@@ -1,0 +1,64 @@
+# =============================================================================
+# Staging Layer — F6.1 Schema & Tests (F6.3.3, F6.4)
+# =============================================================================
+
+version: 2
+
+models:
+  - name: stg_events
+    description: "Cleaned raw events — renamed columns, filtered invalid rows."
+    columns:
+      - name: event_id
+        description: "Unique event identifier."
+        tests:
+          - not_null:
+              severity: error
+      - name: user_id
+        description: "User who triggered the event."
+        tests:
+          - not_null:
+              severity: error
+      - name: event_type
+        description: "Type of user action."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['click', 'add_to_cart', 'remove_from_cart', 'purchase', 'page_view', 'search']
+              severity: warn
+
+  - name: stg_users
+    description: "Cleaned user master data — standardized country/segment."
+    columns:
+      - name: user_id
+        description: "Unique user identifier."
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+  - name: stg_products
+    description: "Cleaned product catalog — parsed tags, computed is_on_sale."
+    columns:
+      - name: product_id
+        description: "Unique product identifier."
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+unit_tests:
+  - name: test_stg_products_is_on_sale
+    model: stg_products
+    given:
+      - input: source('raw', 'products')
+        rows:
+          - {product_id: '550e8400-e29b-41d4-a716-446655440001', discount_percent: 10}
+          - {product_id: '550e8400-e29b-41d4-a716-446655440002', discount_percent: 0}
+          - {product_id: '550e8400-e29b-41d4-a716-446655440003', discount_percent: null}
+    expect:
+      rows:
+        - {product_id: '550e8400-e29b-41d4-a716-446655440001', is_on_sale: true}
+        - {product_id: '550e8400-e29b-41d4-a716-446655440002', is_on_sale: false}
+        - {product_id: '550e8400-e29b-41d4-a716-446655440003', is_on_sale: false}

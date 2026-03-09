@@ -1,0 +1,100 @@
+# =============================================================================
+# Mart Layer — F6.2 Schema & Tests (F6.3.3, F6.4)
+# =============================================================================
+
+version: 2
+
+models:
+  - name: mart_daily_summary
+    description: "Daily aggregated KPIs: events, purchases, revenue, users, conversion."
+    columns:
+      - name: date
+        description: "Calendar date."
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+      - name: total_revenue
+        tests:
+          - assert_revenue_non_negative:
+              severity: warn
+      - name: conversion_rate
+        tests:
+          - assert_conversion_rate_valid:
+              severity: warn
+
+  - name: mart_product_performance
+    description: "Per-product daily funnel metrics: views, clicks, carts, purchases, revenue."
+    columns:
+      - name: product_id
+        tests:
+          - not_null:
+              severity: error
+      - name: revenue
+        tests:
+          - assert_revenue_non_negative:
+              severity: warn
+      - name: conversion_rate
+        tests:
+          - assert_conversion_rate_valid:
+              severity: warn
+
+  - name: mart_user_segments
+    description: "Per-segment daily metrics: user count, events, purchases, revenue."
+    columns:
+      - name: user_segment
+        tests:
+          - not_null:
+              severity: error
+      - name: revenue
+        tests:
+          - assert_revenue_non_negative:
+              severity: warn
+
+  - name: mart_funnel_analysis
+    description: "Per-category daily funnel: page_view → click → cart → purchase."
+    columns:
+      - name: category
+        tests:
+          - not_null:
+              severity: error
+      - name: view_to_click_rate
+        tests:
+          - assert_conversion_rate_valid:
+              severity: warn
+      - name: click_to_cart_rate
+        tests:
+          - assert_conversion_rate_valid:
+              severity: warn
+      - name: cart_to_purchase_rate
+        tests:
+          - assert_conversion_rate_valid:
+              severity: warn
+
+  - name: mart_geo_revenue
+    description: "Per-country daily revenue and event metrics."
+    columns:
+      - name: country
+        tests:
+          - not_null:
+              severity: error
+      - name: revenue
+        tests:
+          - assert_revenue_non_negative:
+              severity: warn
+
+  - name: mart_hourly_kpi
+    description: "Hourly KPIs: events, purchases, revenue, active users."
+    columns:
+      - name: hour_start
+        description: "Start of the hour bucket."
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+      - name: revenue
+        tests:
+          - assert_revenue_non_negative:
+              severity: warn

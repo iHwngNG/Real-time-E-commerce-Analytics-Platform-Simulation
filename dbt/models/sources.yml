@@ -1,0 +1,37 @@
+# =============================================================================
+# dbt Sources — F6.3.4
+# Purpose: Declare raw PostgreSQL tables as dbt sources.
+# =============================================================================
+
+version: 2
+
+sources:
+  - name: raw
+    description: "Raw tables populated by PySpark Streaming and Seeder."
+    schema: public
+    tables:
+      - name: raw_events
+        description: "Raw user behavior events ingested from Kafka via PySpark."
+        columns:
+          - name: event_id
+            description: "Unique event identifier (UUID)."
+          - name: event_type
+            description: "Type of event: click, add_to_cart, remove_from_cart, purchase, page_view, search."
+          - name: timestamp
+            description: "Timestamp when the event occurred."
+          - name: user_id
+            description: "Reference to the user who triggered the event."
+          - name: product_id
+            description: "Reference to the product involved in the event."
+
+      - name: users
+        description: "User master data seeded by simulator."
+        columns:
+          - name: user_id
+            description: "Unique user identifier (UUID)."
+
+      - name: products
+        description: "Product catalog seeded by simulator."
+        columns:
+          - name: product_id
+            description: "Unique product identifier (UUID)."
