@@ -3,6 +3,9 @@ from typing import Optional
 from datetime import datetime
 from services.redis_service import redis_db
 from services.postgres_service import postgres_db
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -54,6 +57,7 @@ async def get_top_products(metric: str = "click"):
     try:
         results = await redis.zrange(key, 0, 9, desc=True, withscores=True)
     except Exception as e:
+        logger.error(f"Error getting top products: {e}")
         results = []
 
     data = [{"product_id": item[0], "score": item[1]} for item in results]
