@@ -13,3 +13,11 @@
 | Unique Violation (Postgres) | Postgres Sink | DB Constraint | Dùng Staging Table + `ON CONFLICT` SQL thực thi qua Spark JVM bridge. |
 | Permission Denied (mkdir) | Spark Checkpoints | OS / Permissions | Chuyển checkpoint path vào `/app/checkpoints` và `chown` cho appuser trong Dockerfile. |
 | Spark Driver Memory (OOM) | Streaming Module | Resource | Tăng `SPARK_DRIVER_MEMORY` lên 1G và thiết lập `limits` trong docker-compose. |
+| ModuleNotFoundError | API Module | Docker/Python | Fixed `CMD` in Dockerfile from `main.py:app` to `main:app` (Uvicorn format). |
+| Connection Closed (curl) | API Module | Network | Ensured CORS middleware and `--host 0.0.0.0` were correctly configured for external host access. |
+| Dashboard White Screen | Dashboard Module | Docker/Volume | Added volume mapping (`./dashboard:/app`) and `/app/node_modules` exclusion in `docker-compose.yml` to allow hot-reloading and ensure latest code is served on host edits. |
+| ERR_CONNECTION_REFUSED | API Layer | Network | Khôi phục port mapping `8000:8000` trong `docker-compose.yml` để Docker container có thể giao tiếp với trình duyệt Host. |
+| Streaming query overhead | Spark Streaming | Resource | Consolidate 3 metrics (Event, Revenue, Users) vào chung 1 job `build_full_summary_1m` để giảm tải RAM và CPU. |
+| Dashboard WebSocket Sync | WebSocket Route | Real-time | Chuyển từ "signal-only" sang "direct-data-push" qua WebSocket. Gửi ngay dữ liệu metrics mới nhất từ Redis cho UI. |
+
+---

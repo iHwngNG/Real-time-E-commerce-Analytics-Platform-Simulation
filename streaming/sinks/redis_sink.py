@@ -53,38 +53,18 @@ def _write_to_redis_batch(batch_df: DataFrame, batch_id: int):
     for row in rows:
         metric_name = row["metric_name"]
         metric_value = float(row["metric_value"]) if row["metric_value"] else 0.0
-        dimension_key = row["dimension_key"]
         dimension_value = row["dimension_value"]
-        window_type = row["window_type"]
 
-        # 1. Update metric:summary HASH for 1-minute event counts (F3.3.1)
-        if metric_name == "event_count" and window_type == "1m":
-            redis_field = SUMMARY_METRIC_MAP.get(dimension_value)
-            if redis_field:
-                pipe.hset("metric:summary", redis_field, metric_value)
-
-        # 2. Update revenue counter in metric:summary
-        if metric_name == "revenue" and window_type == "1m":
-            pipe.hset("metric:summary", "revenue_1m", round(metric_value, 2))
-
-        # 3. Update active users counter
-        if metric_name == "active_users" and window_type == "1m":
-            pipe.hset("metric:summary", "active_users_1m", int(metric_value))
+        # Directly update metric:summary HASH (F3.4.2)
+        # metric_name is now 'click_1m', 'revenue_1m', etc.
+        pipe.hset("metric:summary", metric_name, metric_value)
 
         # 4. ZADD for product leaderboard (1-hour purchase count)
-        if metric_name == "product_purchase_count" and dimension_key == "sku":
-            pipe.zadd(
-                "top:products:purchase",
-                {dimension_value: metric_value},
-            )
+        if metric_name == "product_purchase_count" and row["dimension_key"] == "sku":
+            pipe.zadd("top:products:purchase", {dimension_value: metric_value})
 
-        # 5. ZADD for click leaderboard (1-minute event count for clicks)
-        if (
-            metric_name == "event_count"
-            and dimension_value == "click"
-            and window_type == "1m"
-        ):
-            # Use the click count as overall click score
+        # 5. ZADD for click leaderboard
+        if metric_name == "click_1m":
             pipe.zadd("top:products:click", {"total_clicks": metric_value})
 
     # Execute all batched Redis commands

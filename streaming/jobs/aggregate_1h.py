@@ -38,8 +38,7 @@ def build_revenue_per_category(df: DataFrame) -> DataFrame:
     purchase_df = df.filter(col("event_type") == "purchase")
 
     return (
-        purchase_df.withWatermark("timestamp", WATERMARK_DURATION)
-        .groupBy(
+        purchase_df.groupBy(
             window(col("timestamp"), WINDOW_DURATION),
             col("category"),
         )
@@ -78,8 +77,7 @@ def build_top_products_by_purchase(df: DataFrame) -> DataFrame:
     purchase_df = df.filter(col("event_type") == "purchase")
 
     return (
-        purchase_df.withWatermark("timestamp", WATERMARK_DURATION)
-        .groupBy(
+        purchase_df.groupBy(
             window(col("timestamp"), WINDOW_DURATION),
             col("sku"),
         )

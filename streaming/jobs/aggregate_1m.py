@@ -28,82 +28,37 @@ WATERMARK_DURATION = os.environ.get("SPARK_WATERMARK", "2 minutes")
 WINDOW_DURATION = "1 minute"
 
 
-def build_event_count_per_type(df: DataFrame) -> DataFrame:
+def build_full_summary_1m(df: DataFrame) -> DataFrame:
     """
-    F3.3.1 — Event count per event_type per 1-minute tumbling window.
-
-    Returns DataFrame with columns:
-        window_start, window_end, event_type, event_count
+    F3.3 — Consolidated 1-minute summary aggregator.
+    Performs all high-frequency KPI calculations in a single shuffle to save resources.
     """
-    return (
-        df.groupBy(
-            window(col("timestamp"), WINDOW_DURATION),
-            col("event_type"),
-        )
-        .agg(count("*").alias("event_count"))
-        .select(
-            col("window.start").alias("window_start"),
-            col("window.end").alias("window_end"),
-            lit("1m").alias("window_type"),
-            lit("event_count").alias("metric_name"),
-            col("event_count").cast("double").alias("metric_value"),
-            lit("event_type").alias("dimension_key"),
-            col("event_type").alias("dimension_value"),
-        )
-    )
-
-
-def build_revenue_per_minute(df: DataFrame) -> DataFrame:
-    """
-    F3.3.1 — Revenue per 1-minute tumbling window.
-    Only purchase events contribute to revenue.
-
-    Returns DataFrame with columns:
-        window_start, window_end, total_revenue
-    """
-    purchase_df = df.filter(col("event_type") == "purchase")
+    from pyspark.sql.functions import sum as spark_sum, count, count_distinct, when, col, expr, lit, window
 
     return (
-        purchase_df.withWatermark("timestamp", WATERMARK_DURATION)
-        .groupBy(window(col("timestamp"), WINDOW_DURATION))
+        df.groupBy(window(col("timestamp"), WINDOW_DURATION))
         .agg(
+            count("*").alias("events"),
+            count_distinct("user_id").alias("users"),
             spark_sum(
-                when(
-                    col("sale_price").isNotNull() & col("quantity").isNotNull(),
-                    col("sale_price") * col("quantity"),
-                ).otherwise(lit(0.0))
-            ).alias("total_revenue")
+                when(col("event_type") == "purchase", col("sale_price") * col("quantity")).otherwise(0.0)
+            ).alias("revenue"),
+            count(when(col("event_type") == "click", 1)).alias("clicks"),
+            count(when(col("event_type") == "add_to_cart", 1)).alias("carts"),
+            count(when(col("event_type") == "purchase", 1)).alias("purchases"),
         )
         .select(
             col("window.start").alias("window_start"),
             col("window.end").alias("window_end"),
             lit("1m").alias("window_type"),
-            lit("revenue").alias("metric_name"),
-            col("total_revenue").cast("double").alias("metric_value"),
-            lit(None).cast("string").alias("dimension_key"),
-            lit(None).cast("string").alias("dimension_value"),
-        )
-    )
-
-
-def build_active_users_per_minute(df: DataFrame) -> DataFrame:
-    """
-    F3.3.1 — Active users (distinct user_id) per 1-minute tumbling window.
-
-    Returns DataFrame with columns:
-        window_start, window_end, active_users
-    """
-    return (
-        df.withWatermark("timestamp", WATERMARK_DURATION)
-        .groupBy(window(col("timestamp"), WINDOW_DURATION))
-        .agg(countDistinct("user_id").alias("active_users"))
-        .select(
-            col("window.start").alias("window_start"),
-            col("window.end").alias("window_end"),
-            lit("1m").alias("window_type"),
-            lit("active_users").alias("metric_name"),
-            col("active_users").cast("double").alias("metric_value"),
-            lit(None).cast("string").alias("dimension_key"),
-            lit(None).cast("string").alias("dimension_value"),
+            # Flatten metrics into standard format for sinks
+            expr("stack(6, "
+                 "'events_1m', cast(events as double), 'events', '', "
+                 "'active_users_1m', cast(users as double), 'users', '', "
+                 "'revenue_1m', cast(revenue as double), 'revenue', '', "
+                 "'click_1m', cast(clicks as double), 'click', '', "
+                 "'cart_1m', cast(carts as double), 'add_to_cart', '', "
+                 "'purchase_1m', cast(purchases as double), 'purchase', '') "
+                 "as (metric_name, metric_value, dimension_key, dimension_value)")
         )
     )
