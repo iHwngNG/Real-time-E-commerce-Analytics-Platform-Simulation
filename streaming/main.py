@@ -6,7 +6,6 @@ Robust Multi-Sink Version
 import os
 import sys
 import logging
-import time
 
 # Ensure streaming root is on path
 sys.path.insert(0, os.path.dirname(__file__))
@@ -16,21 +15,10 @@ from jobs.ingest_stream import read_raw_events, process_ingestion
 
 # Aggregation jobs
 from jobs.aggregate_1m import build_full_summary_1m
-from jobs.aggregate_5m import (
-    build_conversion_rate,
-    build_add_to_cart_rate,
-    build_avg_time_on_page_per_category,
-)
-from jobs.aggregate_1h import (
-    build_revenue_per_category,
-    build_top_products_by_purchase,
-    build_user_segment_distribution,
-)
 
 # Sinks
-from sinks.postgres_sink import start_raw_events_sink, start_agg_metrics_sink
+from sinks.postgres_sink import start_raw_events_sink
 from sinks.redis_sink import start_redis_sink
-from sinks.kafka_sink import start_kafka_sink
 
 # =============================================================================
 # Logging
@@ -77,9 +65,8 @@ def main():
 
     # 2. Redis Sink (for Live Dashboard) — Consolidated F3.4.2
     logger.info("Starting Sink: Redis Live Metrics")
-    from jobs.aggregate_1m import build_full_summary_1m
     full_metrics_1m = build_full_summary_1m(clean_df_wm)
-    
+
     active_queries.append(
         start_redis_sink(full_metrics_1m, get_checkpoint_path("redis_v1"))
     )
