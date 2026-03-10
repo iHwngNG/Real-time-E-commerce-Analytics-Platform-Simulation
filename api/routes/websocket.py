@@ -1,6 +1,5 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import asyncio
-import json
 from services.redis_service import redis_db
 
 router = APIRouter()
@@ -9,7 +8,7 @@ router = APIRouter()
 @router.websocket("/ws/live")
 async def websocket_live_endpoint(websocket: WebSocket):
     await websocket.accept()
-    
+
     redis = redis_db.get_client()
     pubsub = redis.pubsub()
     await pubsub.subscribe("metrics-update")
@@ -17,11 +16,15 @@ async def websocket_live_endpoint(websocket: WebSocket):
     async def get_current_metrics():
         summary = await redis.hgetall("metric:summary")
         # Ensure we have some structure even if redis is empty
-        top_clicks = await redis.zrange("top:products:click", 0, 4, desc=True, withscores=True)
+        top_clicks = await redis.zrange(
+            "top:products:click", 0, 4, desc=True, withscores=True
+        )
         return {
             "type": "metrics_update",
             "data": summary or {},
-            "top_products": [{"product_id": item[0], "score": item[1]} for item in top_clicks]
+            "top_products": [
+                {"product_id": item[0], "score": item[1]} for item in top_clicks
+            ],
         }
 
     # Send initial data immediately

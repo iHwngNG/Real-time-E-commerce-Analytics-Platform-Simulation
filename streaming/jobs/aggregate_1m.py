@@ -5,14 +5,6 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import (
-    col,
-    count,
-    sum as spark_sum,
-    when,
-    window,
-    lit,
-)
 
 # =============================================================================
 # Windowed Aggregation — F3.3.1 (Tumbling Window 1 Minute)

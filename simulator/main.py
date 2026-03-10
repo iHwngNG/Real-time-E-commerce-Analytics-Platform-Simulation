@@ -167,7 +167,7 @@ def run_simulate():
     last_log_time = start_time
 
     # Accurate rate limiting
-    target_start_time = start_time
+    # target_start_time = start_time
 
     try:
         while not _shutdown:

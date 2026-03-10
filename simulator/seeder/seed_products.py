@@ -28,7 +28,7 @@ def seed_products():
     generator = ProductGenerator()
     products = generator.generate_batch(NUM_PRODUCTS)
 
-    print(f"[seed_products] Connecting to database...")
+    print("[seed_products] Connecting to database...")
     conn = psycopg2.connect(DATABASE_URL)
     conn.autocommit = False
     cur = conn.cursor()

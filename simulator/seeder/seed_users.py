@@ -27,7 +27,7 @@ def seed_users():
     generator = UserGenerator()
     users = generator.generate_batch(NUM_USERS)
 
-    print(f"[seed_users] Connecting to database...")
+    print("[seed_users] Connecting to database...")
     conn = psycopg2.connect(DATABASE_URL)
     conn.autocommit = False
     cur = conn.cursor()
