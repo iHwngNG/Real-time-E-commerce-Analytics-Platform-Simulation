@@ -5,7 +5,6 @@ from pyspark.sql.types import (
     IntegerType,
     DoubleType,
     TimestampType,
-    LongType,
 )
 
 # =============================================================================

@@ -113,6 +113,6 @@ def start_redis_sink(agg_df: DataFrame, checkpoint_path: str):
         agg_df.writeStream.outputMode("update")
         .foreachBatch(_write_to_redis_batch)
         .option("checkpointLocation", checkpoint_path)
-        .trigger(processingTime="30 seconds")
+        .trigger(processingTime="10 seconds")
         .start()
     )

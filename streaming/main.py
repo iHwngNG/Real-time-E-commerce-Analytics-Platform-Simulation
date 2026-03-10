@@ -1,42 +1,17 @@
 """
 F3 — Streaming Module Main Entry Point
-Entrypoint: python main.py
-
-Purpose: Orchestrate the full real-time pipeline:
-  1. Ingest raw events from Kafka topic [raw-events]
-  2. Parse, flatten, validate (route invalid → DLQ)
-  3. Compute windowed aggregations (1m, 5m, 1h)
-  4. Sink results to PostgreSQL, Redis, and Kafka [aggregated-metrics]
-  5. Keep running (awaitTermination) until stopped
-
-Architecture:
-  Kafka [raw-events]
-       │
-       ▼
-  Ingest & Validate ──► DLQ (invalid events)
-       │
-       ├──► Raw Events Sink      → PostgreSQL.raw_events (append)
-       │
-       ├──► 1m Aggregation ──┐
-       ├──► 5m Aggregation ──┼──► Union all metrics
-       ├──► 1h Aggregation ──┘         │
-       │                               ├──► PostgreSQL.aggregated_metrics (upsert)
-       │                               ├──► Redis (counters + leaderboards + pub/sub)
-       │                               └──► Kafka [aggregated-metrics]
-       │
-       └──► Console (debug, optional)
+Robust Multi-Sink Version
 """
 
 import os
 import sys
 import logging
+import time
 
 # Ensure streaming root is on path
 sys.path.insert(0, os.path.dirname(__file__))
 
 from spark_session import create_spark_session, get_checkpoint_path
-
-# Ingestion
 from jobs.ingest_stream import read_raw_events, process_ingestion
 
 # Aggregation jobs
@@ -74,106 +49,76 @@ logger = logging.getLogger("StreamingMain")
 def main():
     """
     F3 — Main pipeline orchestrator.
-    Starts all streaming queries and blocks until termination.
+    Starts multiple streaming sinks independently for maximum stability.
     """
 
     logger.info("=== STREAMING PIPELINE STARTING ===")
 
-    # =========================================================================
-    # Step 1: Create Spark session (F3.1)
-    # =========================================================================
+    # STep 1: Create Spark session (F3.1)
     spark = create_spark_session("EcommerceStreaming")
-    logger.info("SparkSession created: %s", spark.sparkContext.appName)
+    logger.info("SparkSession created")
 
-    # =========================================================================
     # Step 2: Ingest from Kafka (F3.2)
-    # =========================================================================
     logger.info("Connecting to Kafka and reading [raw-events] topic...")
     df_raw = read_raw_events(spark)
 
     # Parse JSON, flatten, validate → clean_df + dlq_df
     clean_df, dlq_df = process_ingestion(df_raw)
-    logger.info("Ingestion pipeline configured (parse → flatten → validate)")
+    logger.info("Ingestion pipeline configured")
 
-    # =========================================================================
-    # Step 3: Build aggregation DataFrames (F3.3)
-    # Each function returns a DataFrame with unified schema:
-    #   window_start, window_end, window_type, metric_name,
-    #   metric_value, dimension_key, dimension_value
-    # =========================================================================
-    logger.info("Building windowed aggregation queries...")
+    # F3.3 — Apply watermark ONCE to prevent SameContext Analyzer errors
+    watermark_duration = os.environ.get("SPARK_WATERMARK", "5 minutes")
+    clean_df_wm = clean_df.withWatermark("timestamp", watermark_duration)
+    logger.info("Applied watermark of %s to clean events stream", watermark_duration)
 
-    # F3.3.1 — 1-minute tumbling window
-    agg_event_count = build_event_count_per_type(clean_df)
-    agg_revenue_1m = build_revenue_per_minute(clean_df)
-    agg_active_users = build_active_users_per_minute(clean_df)
-
-    # F3.3.2 — 5-minute sliding window (slide 1 min)
-    agg_conversion = build_conversion_rate(clean_df)
-    agg_cart_rate = build_add_to_cart_rate(clean_df)
-    agg_time_on_page = build_avg_time_on_page_per_category(clean_df)
-
-    # F3.3.3 — 1-hour tumbling window
-    agg_revenue_cat = build_revenue_per_category(clean_df)
-    agg_top_products = build_top_products_by_purchase(clean_df)
-    agg_segments = build_user_segment_distribution(clean_df)
-
-    # Union all 1-minute metrics for Redis + Kafka sinks
-    agg_1m_union = agg_event_count.unionByName(agg_revenue_1m).unionByName(
-        agg_active_users
-    )
-
-    # Union all metrics for PostgreSQL aggregated_metrics table
-    agg_all_union = (
-        agg_1m_union.unionByName(agg_conversion)
-        .unionByName(agg_cart_rate)
-        .unionByName(agg_time_on_page)
-        .unionByName(agg_revenue_cat)
-        .unionByName(agg_top_products)
-        .unionByName(agg_segments)
-    )
-
-    logger.info("All aggregation queries built successfully")
-
-    # =========================================================================
-    # Step 4: Start all streaming sinks (F3.4)
-    # =========================================================================
     active_queries = []
 
-    # F3.4.1 — PostgreSQL: raw events (append)
-    logger.info("Starting sink: PostgreSQL raw_events (append)...")
-    q_pg_raw = start_raw_events_sink(
-        clean_df,
-        get_checkpoint_path("pg_raw_events"),
+    # 1. PostgreSQL Raw Events (Append)
+    logger.info("Starting Sink: PostgreSQL Raw")
+    active_queries.append(
+        start_raw_events_sink(clean_df, get_checkpoint_path("pg_raw_v1"))
     )
-    active_queries.append(q_pg_raw)
 
-    # F3.4.1 — PostgreSQL: aggregated metrics (upsert)
-    logger.info("Starting sink: PostgreSQL aggregated_metrics (upsert)...")
-    q_pg_agg = start_agg_metrics_sink(
-        agg_all_union,
-        get_checkpoint_path("pg_agg_metrics"),
+    # 2. Sequential Aggregation Sinks (to Postgres)
+    # This prevents the giant Union analyzer error and allows staggered starts.
+    aggregations = [
+        ("count_1m", build_event_count_per_type(clean_df_wm)),
+        ("rev_1m", build_revenue_per_minute(clean_df_wm)),
+        ("users_1m", build_active_users_per_minute(clean_df_wm)),
+        ("conv_5m", build_conversion_rate(clean_df_wm)),
+        ("cart_5m", build_add_to_cart_rate(clean_df_wm)),
+        ("page_5m", build_avg_time_on_page_per_category(clean_df_wm)),
+        ("rev_cat_1h", build_revenue_per_category(clean_df_wm)),
+        ("tops_1h", build_top_products_by_purchase(clean_df_wm)),
+        ("segments_1h", build_user_segment_distribution(clean_df_wm)),
+    ]
+
+    for name, agg_df in aggregations:
+        suffix = name
+        logger.info(f"Starting Postgres Agg Sink: {suffix}")
+        active_queries.append(
+            start_agg_metrics_sink(agg_df, get_checkpoint_path(f"pg_agg_{suffix}"))
+        )
+        time.sleep(1)  # Breath between query starts
+
+    # 3. Redis Sink (for Live Dashboard)
+    logger.info("Starting Redis Sink")
+    active_queries.append(
+        start_redis_sink(
+            build_event_count_per_type(clean_df_wm), get_checkpoint_path("redis_v1")
+        )
     )
-    active_queries.append(q_pg_agg)
 
-    # F3.4.2 — Redis: real-time counters + leaderboards + pub/sub
-    logger.info("Starting sink: Redis (counters + leaderboards)...")
-    q_redis = start_redis_sink(
-        agg_1m_union.unionByName(agg_top_products),
-        get_checkpoint_path("redis_sink"),
+    # 4. Kafka Aggregations Sink (for downstream consumers)
+    logger.info("Starting Kafka Agg Sink")
+    active_queries.append(
+        start_kafka_sink(
+            build_revenue_per_minute(clean_df_wm), get_checkpoint_path("kafka_agg_v1")
+        )
     )
-    active_queries.append(q_redis)
 
-    # F3.4.3 — Kafka: aggregated-metrics topic
-    logger.info("Starting sink: Kafka [aggregated-metrics] topic...")
-    q_kafka = start_kafka_sink(
-        agg_1m_union,
-        get_checkpoint_path("kafka_agg_sink"),
-    )
-    active_queries.append(q_kafka)
-
-    # F3.5.1 — DLQ: malformed events → Kafka [dead-letter-queue]
-    logger.info("Starting sink: Kafka [dead-letter-queue] for invalid events...")
+    # 5. DLQ Sink
+    logger.info("Starting DLQ Sink")
     from pyspark.sql.functions import to_json, struct, col
 
     dlq_kafka_df = dlq_df.select(
@@ -187,30 +132,22 @@ def main():
             os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092"),
         )
         .option("topic", "dead-letter-queue")
-        .option("checkpointLocation", get_checkpoint_path("dlq_sink"))
-        .trigger(processingTime="30 seconds")
+        .option("checkpointLocation", get_checkpoint_path("dlq_v1"))
+        .trigger(processingTime="10 seconds")
         .start()
     )
     active_queries.append(q_dlq)
 
-    # =========================================================================
-    # Step 5: Report and await termination (F3.5.3)
-    # =========================================================================
-    logger.info("=== STREAMING PIPELINE RUNNING ===")
-    logger.info("Active streaming queries: %d", len(active_queries))
-    for i, q in enumerate(active_queries):
-        logger.info("  [%d] %s (id=%s)", i, q.name or "unnamed", q.id)
-
-    logger.info(
-        "Pipeline is now processing events in real-time. "
-        "Press Ctrl+C to stop gracefully."
-    )
-
-    # Block until any query terminates (or manual stop)
+    logger.info("=== ALL %d STREAMING QUERIES RUNNING ===", len(active_queries))
     spark.streams.awaitAnyTermination()
-
-    logger.info("=== STREAMING PIPELINE STOPPED ===")
 
 
 if __name__ == "__main__":
-    main()
+    import traceback
+
+    try:
+        main()
+    except Exception as e:
+        logger.error("FATAL ERROR in streaming pipeline: %s", e)
+        traceback.print_exc()
+        sys.exit(1)

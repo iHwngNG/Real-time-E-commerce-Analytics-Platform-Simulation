@@ -5,7 +5,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, to_json, struct, current_timestamp
+from pyspark.sql.functions import col, to_json, struct
 
 # =============================================================================
 # Kafka Sink — F3.4.3
@@ -45,6 +45,6 @@ def start_kafka_sink(agg_df: DataFrame, checkpoint_path: str):
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS)
         .option("topic", AGGREGATED_TOPIC)
         .option("checkpointLocation", checkpoint_path)
-        .trigger(processingTime="30 seconds")
+        .trigger(processingTime="10 seconds")
         .start()
     )

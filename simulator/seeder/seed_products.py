@@ -86,8 +86,15 @@ def seed_products():
             conn.commit()
         except Exception as e:
             conn.rollback()
-            print(f"[seed_products] ERROR on batch {i // BATCH_SIZE + 1}: {e}")
-            raise
+            error_msg = str(e).lower()
+            if "already exists" in error_msg or "unique constraint" in error_msg:
+                skipped += len(batch)
+                print(
+                    f"[seed_products] Skipping batch {i // BATCH_SIZE + 1} due to duplicate SKU or product_id"
+                )
+            else:
+                print(f"[seed_products] ERROR on batch {i // BATCH_SIZE + 1}: {e}")
+                raise
 
         progress = min(i + BATCH_SIZE, len(products))
         print(

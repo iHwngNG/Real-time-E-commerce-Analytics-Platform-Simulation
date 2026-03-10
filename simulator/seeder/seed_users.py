@@ -1,6 +1,5 @@
 import os
 import sys
-import json
 import psycopg2
 from psycopg2.extras import execute_values
 
@@ -84,8 +83,16 @@ def seed_users():
             conn.commit()
         except Exception as e:
             conn.rollback()
-            print(f"[seed_users] ERROR on batch {i // BATCH_SIZE + 1}: {e}")
-            raise
+            error_msg = str(e).lower()
+            if "already exists" in error_msg or "unique constraint" in error_msg:
+                # If batch fails due to uniqueness (like username or user_id)
+                skipped += len(batch)
+                print(
+                    f"[seed_users] Skipping batch {i // BATCH_SIZE + 1} due to duplicate data"
+                )
+            else:
+                print(f"[seed_users] ERROR on batch {i // BATCH_SIZE + 1}: {e}")
+                raise
 
         progress = min(i + BATCH_SIZE, len(users))
         print(

@@ -95,15 +95,13 @@ class EventProducer:
     def publish_batch(self, events: list) -> None:
         """
         Publish a batch of events to Kafka.
-        Each event is sent asynchronously; flush() ensures delivery.
+        Each event is sent asynchronously.
+        Note: Removed flush() from here to allow smoother flow.
         Args:
             events: List of event dictionaries.
         """
         for event in events:
             self.publish_event(event)
-
-        # Force send all buffered messages
-        self._producer.flush()
 
     def get_stats(self) -> dict:
         """Return delivery statistics."""

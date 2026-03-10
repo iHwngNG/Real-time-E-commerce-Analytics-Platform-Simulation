@@ -13,7 +13,7 @@ SPARK_POSTGRES_PACKAGE = "org.postgresql:postgresql:42.7.3"
 SPARK_JARS_PACKAGES = f"{SPARK_KAFKA_PACKAGE},{SPARK_POSTGRES_PACKAGE}"
 
 # Checkpoint base directory (F3.1.2)
-CHECKPOINT_BASE = os.environ.get("SPARK_CHECKPOINT_DIR", "/tmp/spark-checkpoints")
+CHECKPOINT_BASE = os.environ.get("SPARK_CHECKPOINT_DIR", "/app/checkpoints")
 
 
 def create_spark_session(app_name: str = "EcommerceStreaming") -> SparkSession:
@@ -38,11 +38,14 @@ def create_spark_session(app_name: str = "EcommerceStreaming") -> SparkSession:
         .config("spark.sql.shuffle.partitions", "6")
         .config("spark.streaming.stopGracefullyOnShutdown", "true")
         .config("spark.sql.streaming.forceDeleteTempCheckpointLocation", "true")
+        .config("spark.driver.memory", "1g")
+        .config("spark.executor.memory", "1g")
+        .config("spark.sql.adaptive.enabled", "false")
         .getOrCreate()
     )
 
-    # Reduce noisy Spark logs to WARN level
-    spark.sparkContext.setLogLevel("WARN")
+    # Reduce noisy Spark logs to INFO level
+    spark.sparkContext.setLogLevel("INFO")
 
     return spark
 

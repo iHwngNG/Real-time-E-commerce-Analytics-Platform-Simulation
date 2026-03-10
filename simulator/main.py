@@ -14,7 +14,6 @@ import time
 import signal
 import logging
 import argparse
-from datetime import datetime, timezone
 
 import psycopg2
 
@@ -164,35 +163,47 @@ def run_simulate():
     # =========================================================================
     start_time = time.time()
     total_events = 0
-    batch_size = 100  # F1.4.3 — batch publish size
-    log_interval = 5  # Log stats every N seconds
+    log_interval = 2  # Frequent stats for visual feedback
     last_log_time = start_time
+
+    # Accurate rate limiting
+    target_start_time = start_time
 
     try:
         while not _shutdown:
             # Check timed mode
-            elapsed = time.time() - start_time
+            now = time.time()
+            elapsed = now - start_time
             if run_duration > 0 and elapsed >= run_duration:
                 logger.info("Timed mode expired after %ds. Stopping.", run_duration)
                 break
 
             # Determine current rate (may vary with peak hours)
             current_rate = generator.get_current_rate()
-            events_per_batch = min(batch_size, max(1, int(current_rate)))
+            if current_rate <= 0:
+                time.sleep(1)
+                continue
 
-            # Generate and publish a batch
-            events = generator.generate_batch(events_per_batch)
-            producer.publish_batch(events)
-            total_events += len(events)
+            # Calculate how many events we SHOULD have sent by now
+            target_total = int((now - start_time) * current_rate)
+            to_send = target_total - total_events
+
+            if to_send > 0:
+                # Cap batch size to avoid long processing spikes
+                batch_to_send = min(to_send, 100)
+                events = generator.generate_batch(batch_to_send)
+                producer.publish_batch(events)
+                total_events += len(events)
 
             # Periodic stats logging
-            now = time.time()
             if now - last_log_time >= log_interval:
-                actual_rate = total_events / (now - start_time)
+                actual_rate = (
+                    total_events / (now - start_time) if (now - start_time) > 0 else 0
+                )
                 stats = producer.get_stats()
                 logger.info(
-                    "Events sent: %d | rate: %.0f/s (target: %d/s) | "
-                    "kafka_ok: %d | kafka_err: %d | peak: %s",
+                    "STREAMING: Sent: %d | Rate: %.1f/s (Target: %d/s) | "
+                    "Kafka OK: %d | Err: %d | Peak: %s",
                     total_events,
                     actual_rate,
                     current_rate,
@@ -202,9 +213,8 @@ def run_simulate():
                 )
                 last_log_time = now
 
-            # Throttle to target rate
-            sleep_time = events_per_batch / current_rate if current_rate > 0 else 1.0
-            time.sleep(sleep_time)
+            # Sleep a tiny bit to avoid busy-waiting
+            time.sleep(0.01)
 
     except Exception as exc:
         logger.exception("Simulation error: %s", exc)

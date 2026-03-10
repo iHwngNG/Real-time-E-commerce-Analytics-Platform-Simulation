@@ -105,8 +105,7 @@ def build_user_segment_distribution(df: DataFrame) -> DataFrame:
         window_start, window_end, user_segment, segment_count
     """
     return (
-        df.withWatermark("timestamp", WATERMARK_DURATION)
-        .groupBy(
+        df.groupBy(
             window(col("timestamp"), WINDOW_DURATION),
             col("user_segment"),
         )

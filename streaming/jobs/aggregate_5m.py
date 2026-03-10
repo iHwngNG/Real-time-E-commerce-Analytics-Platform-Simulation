@@ -37,8 +37,7 @@ def build_conversion_rate(df: DataFrame) -> DataFrame:
         window_start, window_end, metric_value (conversion_rate)
     """
     return (
-        df.withWatermark("timestamp", WATERMARK_DURATION)
-        .groupBy(window(col("timestamp"), WINDOW_DURATION, SLIDE_DURATION))
+        df.groupBy(window(col("timestamp"), WINDOW_DURATION, SLIDE_DURATION))
         .agg(
             count(when(col("event_type") == "purchase", 1)).alias("purchase_count"),
             count(when(col("event_type") == "click", 1)).alias("click_count"),
@@ -71,8 +70,7 @@ def build_add_to_cart_rate(df: DataFrame) -> DataFrame:
         window_start, window_end, metric_value (add_to_cart_rate)
     """
     return (
-        df.withWatermark("timestamp", WATERMARK_DURATION)
-        .groupBy(window(col("timestamp"), WINDOW_DURATION, SLIDE_DURATION))
+        df.groupBy(window(col("timestamp"), WINDOW_DURATION, SLIDE_DURATION))
         .agg(
             count(when(col("event_type") == "add_to_cart", 1)).alias("cart_count"),
             count(when(col("event_type") == "product_view", 1)).alias("view_count"),
@@ -106,13 +104,12 @@ def build_avg_time_on_page_per_category(df: DataFrame) -> DataFrame:
     """
     # Filter events that have time_on_page_sec data
     browsing_df = df.filter(
-        col("event_type").isin("product_view", "click")
+        col("event_type").isin(["product_view", "click"])
         & col("time_on_page_sec").isNotNull()
     )
 
     return (
-        browsing_df.withWatermark("timestamp", WATERMARK_DURATION)
-        .groupBy(
+        browsing_df.groupBy(
             window(col("timestamp"), WINDOW_DURATION, SLIDE_DURATION),
             col("category"),
         )

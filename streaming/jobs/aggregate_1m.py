@@ -36,8 +36,7 @@ def build_event_count_per_type(df: DataFrame) -> DataFrame:
         window_start, window_end, event_type, event_count
     """
     return (
-        df.withWatermark("timestamp", WATERMARK_DURATION)
-        .groupBy(
+        df.groupBy(
             window(col("timestamp"), WINDOW_DURATION),
             col("event_type"),
         )
